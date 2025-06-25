@@ -40,7 +40,7 @@ func main() {
 			return
 		}
 		fmt.Println("Extracting mongosync binary...")
-		err = exec.Command("tar", "-xzf", tmpTgz).Run()
+		err = exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync").Run()
 		if err != nil {
 			fmt.Println("Extraction failed:", err)
 			return
