@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func main() {
@@ -50,7 +51,22 @@ func main() {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	err := cmd.Run()
+	err := cmd.Start()
+	if err != nil {
+		fmt.Println("mongosync failed to start:", err)
+		return
+	}
+
+	// Wait a few seconds for mongosync to initialize
+	time.Sleep(5 * time.Second)
+
+	fmt.Println("Triggering sync start via REST API...")
+	curlCmd := exec.Command("curl", "-XPOST", "http://localhost:27182/api/v1/start", "-H", "Content-Type: application/json", "--data", `{"source":"cluster0","destination":"cluster1"}`)
+	curlCmd.Stdout = os.Stdout
+	curlCmd.Stderr = os.Stderr
+	_ = curlCmd.Run()
+
+	err = cmd.Wait()
 	if err != nil {
 		fmt.Println("mongosync failed:", err)
 		return
