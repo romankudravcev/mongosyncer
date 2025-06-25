@@ -46,7 +46,7 @@ func main() {
 	}
 
 	fmt.Println("Running mongosync...")
-	cmd := exec.Command(binPath, "--acceptRemoteAPIRequest", "--disableVerification", "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI)
+	cmd := exec.Command(binPath, "--disableVerification", "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
