@@ -46,9 +46,7 @@ func main() {
 	}
 
 	fmt.Println("Running mongosync...")
-	uniqueID := fmt.Sprintf("sync-%d", time.Now().Unix())
-
-	cmd := exec.Command(binPath, "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI, "--id", uniqueID)
+	cmd := exec.Command(binPath, "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
