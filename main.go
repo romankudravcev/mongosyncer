@@ -65,7 +65,7 @@ func main() {
 	}
 
 	fmt.Println("Running mongosync...")
-	cmd := exec.Command(binPath, "--source", sourceURI, "--target", targetURI)
+	cmd := exec.Command(binPath, "--cluster0", sourceURI, "--cluster1", targetURI)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
