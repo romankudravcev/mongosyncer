@@ -4,9 +4,9 @@ WORKDIR /app
 COPY . .
 RUN go build -o mongosyncer main.go
 
-FROM alpine:3.19
+FROM debian:bookworm-slim
 WORKDIR /app
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y curl tar && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/mongosyncer /app/mongosyncer
 RUN chmod +x /app/mongosyncer
 ENTRYPOINT ["/app/mongosyncer"]
