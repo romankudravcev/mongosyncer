@@ -6,7 +6,7 @@ RUN go build -o mongosyncer main.go
 
 FROM alpine:3.19
 WORKDIR /app
+RUN apk add --no-cache curl
 COPY --from=builder /app/mongosyncer /app/mongosyncer
 RUN chmod +x /app/mongosyncer
 ENTRYPOINT ["/app/mongosyncer"]
-
