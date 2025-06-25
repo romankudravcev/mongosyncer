@@ -2,29 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 )
-
-func downloadMongosync(dest string) error {
-	url := "https://fastdl.mongodb.org/tools/mongosync/mongosync-ubuntu2404-x86_64-1.14.0.tgz"
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
 
 func main() {
 	binPath := "./mongosync"
@@ -65,7 +45,7 @@ func main() {
 	}
 
 	fmt.Println("Running mongosync...")
-	cmd := exec.Command(binPath, "--cluster0", sourceURI, "--cluster1", targetURI)
+	cmd := exec.Command(binPath, "--disableVerification", "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
