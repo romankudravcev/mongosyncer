@@ -61,7 +61,12 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	fmt.Println("Triggering sync start via REST API...")
-	curlCmd := exec.Command("curl", "-XPOST", "http://localhost:27182/api/v1/start", "-H", "Content-Type: application/json", "--data", `{"source":"cluster0","destination":"cluster1"}`)
+	curlCmd := exec.Command(
+		"curl",
+		"-XPOST", "http://localhost:27182/api/v1/start",
+		"-H", "Content-Type: application/json",
+		"--data", `{"source":"cluster0","destination":"cluster1"}`,
+	)
 	curlCmd.Stdout = os.Stdout
 	curlCmd.Stderr = os.Stderr
 	_ = curlCmd.Run()
