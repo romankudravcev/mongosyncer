@@ -65,7 +65,7 @@ func main() {
 		"curl",
 		"-XPOST", "http://localhost:27182/api/v1/start",
 		"-H", "Content-Type: application/json",
-		"--data", `{"source":"cluster0","destination":"cluster1"}`,
+		"--data", `{"source":"cluster0","destination":"cluster1","verification":{"enabled":false}}`,
 	)
 	curlCmd.Stdout = os.Stdout
 	curlCmd.Stderr = os.Stderr
