@@ -29,11 +29,14 @@ func downloadMongosync(dest string) error {
 func main() {
 	binPath := "./mongosync"
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		fmt.Println("Downloading mongosync binary...")
+		fmt.Println("Downloading mongosync binary with curl...")
 		tmpTgz := "./mongosync.tgz"
-		err := downloadMongosync(tmpTgz)
+		curlCmd := exec.Command("curl", "-L", "-o", tmpTgz, "https://fastdl.mongodb.org/tools/mongosync/mongosync-ubuntu2404-x86_64-1.14.0.tgz")
+		curlCmd.Stdout = os.Stdout
+		curlCmd.Stderr = os.Stderr
+		err := curlCmd.Run()
 		if err != nil {
-			fmt.Println("Download failed:", err)
+			fmt.Println("curl download failed:", err)
 			return
 		}
 		fmt.Println("Extracting mongosync binary...")
@@ -48,7 +51,7 @@ func main() {
 			return
 		}
 		fmt.Println("Listing current directory contents:")
-		lsCmd := exec.Command("ls", "-altr", "./")
+		lsCmd := exec.Command("ls", "-l", "./")
 		lsCmd.Stdout = os.Stdout
 		lsCmd.Stderr = os.Stderr
 		_ = lsCmd.Run()
