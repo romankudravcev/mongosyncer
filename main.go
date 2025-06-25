@@ -36,15 +36,22 @@ func main() {
 			fmt.Println("Download failed:", err)
 			return
 		}
-		// Extract the binary (assume tar.gz contains 'mongosync' at top level)
+		fmt.Println("Extracting mongosync binary...")
 		err = exec.Command("tar", "-xzf", tmpTgz).Run()
 		if err != nil {
+			fmt.Println("Extraction failed:", err)
 			return
 		}
 		err = os.Remove(tmpTgz)
 		if err != nil {
+			fmt.Println("Failed to remove temp archive:", err)
 			return
 		}
+		fmt.Println("Listing current directory contents:")
+		lsCmd := exec.Command("ls", "-altr", "./")
+		lsCmd.Stdout = os.Stdout
+		lsCmd.Stderr = os.Stderr
+		_ = lsCmd.Run()
 	}
 
 	sourceURI := os.Getenv("MONGOSYNC_SOURCE")
@@ -54,12 +61,16 @@ func main() {
 		return
 	}
 
+	fmt.Println("Running mongosync...")
 	cmd := exec.Command(binPath, "--source", sourceURI, "--target", targetURI)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	fmt.Println("Running mongosync...")
-	if err := cmd.Run(); err != nil {
+
+	err := cmd.Run()
+	if err != nil {
 		fmt.Println("mongosync failed:", err)
+		return
 	}
+	fmt.Println("mongosync finished successfully.")
 }
