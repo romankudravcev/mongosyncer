@@ -40,15 +40,26 @@ func (d *Downloader) downloadBinary(binaryPath, downloadURL string) error {
 	}
 
 	d.logger.Info("Extracting mongosync binary...")
-	extractCmd := exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
+	extractCmd := exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "--transform", fmt.Sprintf("s|mongosync|%s|", binaryPath), "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
 	if err := extractCmd.Run(); err != nil {
-		return fmt.Errorf("extraction failed: %w", err)
+		// Fallback: extract to default name and then rename
+		extractCmd = exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
+		if err := extractCmd.Run(); err != nil {
+			return fmt.Errorf("extraction failed: %w", err)
+		}
+
+		// Rename to the desired path if different
+		if binaryPath != "./mongosync" {
+			if err := os.Rename("./mongosync", binaryPath); err != nil {
+				return fmt.Errorf("failed to rename binary to %s: %w", binaryPath, err)
+			}
+		}
 	}
 
 	if err := os.Remove(tmpTgz); err != nil {
 		d.logger.Warn("Failed to remove temp archive", "error", err)
 	}
 
-	d.logger.Info("Mongosync binary downloaded successfully")
+	d.logger.Info("Mongosync binary downloaded successfully", "path", binaryPath)
 	return nil
 }
