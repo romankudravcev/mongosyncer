@@ -1,80 +1,73 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
-	"time"
+
+	"mongosyncer/pkg/api"
+	"mongosyncer/pkg/config"
+	"mongosyncer/pkg/downloader"
+	"mongosyncer/pkg/mongosync"
 )
 
 func main() {
-	binPath := "./mongosync"
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		fmt.Println("Downloading mongosync binary with curl...")
-		tmpTgz := "./mongosync.tgz"
-		curlCmd := exec.Command("curl", "-L", "-o", tmpTgz, "https://fastdl.mongodb.org/tools/mongosync/mongosync-ubuntu2404-x86_64-1.14.0.tgz")
-		curlCmd.Stdout = os.Stdout
-		curlCmd.Stderr = os.Stderr
-		err := curlCmd.Run()
-		if err != nil {
-			fmt.Println("curl download failed:", err)
-			return
-		}
-		fmt.Println("Extracting mongosync binary...")
-		err = exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync").Run()
-		if err != nil {
-			fmt.Println("Extraction failed:", err)
-			return
-		}
-		err = os.Remove(tmpTgz)
-		if err != nil {
-			fmt.Println("Failed to remove temp archive:", err)
-			return
-		}
-		fmt.Println("Listing current directory contents:")
-		lsCmd := exec.Command("ls", "-l", "./")
-		lsCmd.Stdout = os.Stdout
-		lsCmd.Stderr = os.Stderr
-		_ = lsCmd.Run()
-	}
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 
-	sourceURI := os.Getenv("MONGOSYNC_SOURCE")
-	targetURI := os.Getenv("MONGOSYNC_TARGET")
-	if sourceURI == "" || targetURI == "" {
-		fmt.Println("Please set MONGOSYNC_SOURCE and MONGOSYNC_TARGET environment variables.")
-		return
-	}
-
-	fmt.Println("Running mongosync...")
-	cmd := exec.Command(binPath, "--acceptDisclaimer", "--cluster0", sourceURI, "--cluster1", targetURI)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err := cmd.Start()
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		fmt.Println("mongosync failed to start:", err)
-		return
+		logger.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
 	}
 
-	// Wait a few seconds for mongosync to initialize
-	time.Sleep(5 * time.Second)
+	d := downloader.New(logger)
+	apiClient := api.New(cfg.APIBaseURL, logger)
+	syncManager := mongosync.New(cfg.BinaryPath, cfg.SourceURI, cfg.TargetURI, logger)
 
-	fmt.Println("Triggering sync start via REST API...")
-	curlCmd := exec.Command(
-		"curl",
-		"-XPOST", "http://localhost:27182/api/v1/start",
-		"-H", "Content-Type: application/json",
-		"--data", `{"source":"cluster0","destination":"cluster1","verification":{"enabled":false}}`,
-	)
-	curlCmd.Stdout = os.Stdout
-	curlCmd.Stderr = os.Stderr
-	_ = curlCmd.Run()
-
-	err = cmd.Wait()
-	if err != nil {
-		fmt.Println("mongosync failed:", err)
-		return
+	if err := d.EnsureBinary(cfg.BinaryPath, cfg.DownloadURL); err != nil {
+		logger.Error("Failed to ensure mongosync binary", "error", err)
+		os.Exit(1)
 	}
-	fmt.Println("mongosync finished successfully.")
+
+	if err := syncManager.Start(); err != nil {
+		logger.Error("Failed to start mongosync", "error", err)
+		os.Exit(1)
+	}
+
+	if err := executeSyncWorkflow(apiClient, syncManager, logger); err != nil {
+		logger.Error("Sync workflow failed", "error", err)
+		err := syncManager.Stop()
+		if err != nil {
+			logger.Error("Failed to stop mongosync process gracefully", "error", err)
+		}
+		os.Exit(1)
+	}
+}
+
+func executeSyncWorkflow(apiClient *api.Client, syncManager *mongosync.Manager, logger *slog.Logger) error {
+	// Start the sync process via API
+	if err := apiClient.StartSync(); err != nil {
+		return err
+	}
+
+	// Wait for sync to be ready for commit (monitoring progress every 5 seconds)
+	if err := apiClient.WaitForCanCommit(); err != nil {
+		return err
+	}
+
+	// Commit the sync
+	if err := apiClient.Commit(); err != nil {
+		return err
+	}
+
+	// Verify the sync is actually committed
+	if err := apiClient.VerifyCommitted(); err != nil {
+		return err
+	}
+
+	// Sync is complete and verified
+	logger.Info("MongoDB synchronization completed and verified successfully!")
+	return nil
 }
