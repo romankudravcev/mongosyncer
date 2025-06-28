@@ -36,7 +36,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := executeSyncWorkflow(apiClient, syncManager, logger); err != nil {
+	// Execute sync workflow
+	if err := executeSyncWorkflow(apiClient, logger); err != nil {
 		logger.Error("Sync workflow failed", "error", err)
 		err := syncManager.Stop()
 		if err != nil {
@@ -46,7 +47,7 @@ func main() {
 	}
 }
 
-func executeSyncWorkflow(apiClient *api.Client, syncManager *mongosync.Manager, logger *slog.Logger) error {
+func executeSyncWorkflow(apiClient *api.Client, logger *slog.Logger) error {
 	// Start the sync process via API
 	if err := apiClient.StartSync(); err != nil {
 		return err
