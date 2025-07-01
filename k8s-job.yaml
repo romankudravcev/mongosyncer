@@ -8,11 +8,8 @@ spec:
       containers:
       - name: mongosyncer
         image: ghcr.io/romankudravcev/mongosyncer:latest
-        env:
-        - name: MONGOSYNC_SOURCE
-          value: "<your-source-uri>"
-        - name: MONGOSYNC_TARGET
-          value: "<your-target-uri>"
-      restartPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: mongosyncer-config
+      restartPolicy: Always
   backoffLimit: 2
-

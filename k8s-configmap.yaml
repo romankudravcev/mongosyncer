@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongosyncer-config
+data:
+  MONGOSYNC_SOURCE: "<your-source-uri>"
+  MONGOSYNC_TARGET: "<your-target-uri>"
