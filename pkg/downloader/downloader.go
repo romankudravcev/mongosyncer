@@ -56,6 +56,13 @@ func (d *Downloader) downloadBinary(binaryPath, downloadURL string) error {
 		}
 	}
 
+	// Make the binary executable
+	d.logger.Info("Making mongosync binary executable...")
+	chmodCmd := exec.Command("chmod", "+x", binaryPath)
+	if err := chmodCmd.Run(); err != nil {
+		return fmt.Errorf("failed to make binary executable: %w", err)
+	}
+
 	if err := os.Remove(tmpTgz); err != nil {
 		d.logger.Warn("Failed to remove temp archive", "error", err)
 	}
