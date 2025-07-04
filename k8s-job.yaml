@@ -11,5 +11,5 @@ spec:
         envFrom:
         - configMapRef:
             name: mongosyncer-config
-      restartPolicy: OnFailure
+      restartPolicy: Never
   backoffLimit: 2
