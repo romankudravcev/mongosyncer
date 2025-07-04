@@ -24,9 +24,12 @@ type CommitResponse struct {
 
 // ProgressResponse represents the response from the progress endpoint
 type ProgressResponse struct {
-	CanCommit bool   `json:"canCommit"`
-	State     string `json:"state"`
-	Info      string `json:"info"`
+	Progress struct {
+		CanCommit bool   `json:"canCommit"`
+		State     string `json:"state"`
+		Info      string `json:"info"`
+	} `json:"progress"`
+	Success bool `json:"success"`
 }
 
 // StartRequest represents the request payload for starting sync
@@ -118,9 +121,9 @@ func (c *Client) WaitForCanCommit() error {
 			continue
 		}
 
-		c.logger.Info("Progress check", "state", progress.State, "canCommit", progress.CanCommit, "info", progress.Info)
+		c.logger.Info("Progress check", "state", progress.Progress.State, "canCommit", progress.Progress.CanCommit, "info", progress.Progress.Info)
 
-		if progress.CanCommit {
+		if progress.Progress.CanCommit {
 			c.logger.Info("Sync is ready to commit!")
 			return nil
 		}
@@ -199,14 +202,14 @@ func (c *Client) VerifyCommitted() error {
 			continue
 		}
 
-		c.logger.Info("Verification check", "state", progress.State, "canCommit", progress.CanCommit, "info", progress.Info)
+		c.logger.Info("Verification check", "state", progress.Progress.State, "canCommit", progress.Progress.CanCommit, "info", progress.Progress.Info)
 
-		if progress.State == "COMMITTED" {
+		if progress.Progress.State == "COMMITTED" {
 			c.logger.Info("Sync verified as COMMITTED successfully!")
 			return nil
 		}
 
-		c.logger.Info("Waiting for sync to reach COMMITTED state...", "currentState", progress.State)
+		c.logger.Info("Waiting for sync to reach COMMITTED state...", "currentState", progress.Progress.State)
 		time.Sleep(5 * time.Second)
 	}
 }
