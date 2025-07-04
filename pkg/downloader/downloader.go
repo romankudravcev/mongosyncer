@@ -40,19 +40,16 @@ func (d *Downloader) downloadBinary(binaryPath, downloadURL string) error {
 	}
 
 	d.logger.Info("Extracting mongosync binary...")
-	extractCmd := exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "--transform", fmt.Sprintf("s|mongosync|%s|", binaryPath), "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
+	// Use simple extraction approach like the working version
+	extractCmd := exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
 	if err := extractCmd.Run(); err != nil {
-		// Fallback: extract to default name and then rename
-		extractCmd = exec.Command("tar", "-xzf", tmpTgz, "--strip-components=2", "mongosync-ubuntu2404-x86_64-1.14.0/bin/mongosync")
-		if err := extractCmd.Run(); err != nil {
-			return fmt.Errorf("extraction failed: %w", err)
-		}
+		return fmt.Errorf("extraction failed: %w", err)
+	}
 
-		// Rename to the desired path if different
-		if binaryPath != "./mongosync" {
-			if err := os.Rename("./mongosync", binaryPath); err != nil {
-				return fmt.Errorf("failed to rename binary to %s: %w", binaryPath, err)
-			}
+	// If the binary path is not "./mongosync", rename it
+	if binaryPath != "./mongosync" {
+		if err := os.Rename("./mongosync", binaryPath); err != nil {
+			return fmt.Errorf("failed to rename binary: %w", err)
 		}
 	}
 
