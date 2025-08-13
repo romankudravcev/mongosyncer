@@ -34,7 +34,6 @@ func (m *Manager) Start() error {
 		"--acceptDisclaimer",
 		"--cluster0", m.sourceURI,
 		"--cluster1", m.targetURI,
-		"--syncStartDelay=20s",
 	)
 
 	m.cmd.Stdout = os.Stdout
