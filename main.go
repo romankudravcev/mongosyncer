@@ -49,7 +49,7 @@ func main() {
 }
 
 func executeSyncWorkflow(apiClient *api.Client, logger *slog.Logger) error {
-	time.Sleep(30 * time.Second)
+	time.Sleep(130 * time.Second)
 
 	// Start the sync process via API
 	if err := apiClient.StartSync(); err != nil {
