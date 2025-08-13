@@ -51,6 +51,28 @@ func New(baseURL string, logger *slog.Logger) *Client {
 	}
 }
 
+func (c *Client) WaitForReadyState() error {
+	url := fmt.Sprintf("%s/progress", c.baseURL)
+	for {
+		resp, err := c.httpClient.Get(url)
+		if err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		var progress ProgressResponse
+		if err := json.Unmarshal(body, &progress); err != nil {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if progress.Progress.State != "IDLE" {
+			return nil
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
 // StartSync initiates the synchronization process
 func (c *Client) StartSync() error {
 	url := fmt.Sprintf("%s/start", c.baseURL)

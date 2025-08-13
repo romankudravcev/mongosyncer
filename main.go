@@ -48,6 +48,10 @@ func main() {
 }
 
 func executeSyncWorkflow(apiClient *api.Client, logger *slog.Logger) error {
+	if err := apiClient.WaitForReadyState(); err != nil {
+		return err
+	}
+
 	// Start the sync process via API
 	if err := apiClient.StartSync(); err != nil {
 		return err
