@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"time"
 
 	"mongosyncer/pkg/api"
 	"mongosyncer/pkg/config"
@@ -48,9 +49,7 @@ func main() {
 }
 
 func executeSyncWorkflow(apiClient *api.Client, logger *slog.Logger) error {
-	if err := apiClient.WaitForReadyState(); err != nil {
-		return err
-	}
+	time.Sleep(30 * time.Second)
 
 	// Start the sync process via API
 	if err := apiClient.StartSync(); err != nil {
