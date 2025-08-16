@@ -2,12 +2,17 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Client handles mongosync REST API interactions
@@ -234,4 +239,169 @@ func (c *Client) VerifyCommitted() error {
 		c.logger.Info("Waiting for sync to reach COMMITTED state...", "currentState", progress.Progress.State)
 		time.Sleep(5 * time.Second)
 	}
+}
+
+// CleanDestination drops all user databases on the destination cluster
+func (c *Client) CleanDestination(destinationURI string) error {
+	c.logger.Info("Cleaning destination cluster...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Connect to destination MongoDB
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(destinationURI))
+	if err != nil {
+		return fmt.Errorf("failed to connect to destination cluster: %w", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// List all databases
+	databases, err := client.ListDatabaseNames(ctx, map[string]interface{}{})
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	// Drop all user databases (skip system databases)
+	systemDatabases := map[string]bool{
+		"admin":  true,
+		"local":  true,
+		"config": true,
+	}
+
+	for _, dbName := range databases {
+		if !systemDatabases[dbName] {
+			c.logger.Info("Dropping database", "database", dbName)
+			if err := client.Database(dbName).Drop(ctx); err != nil {
+				return fmt.Errorf("failed to drop database %s: %w", dbName, err)
+			}
+		}
+	}
+
+	c.logger.Info("Destination cluster cleaned successfully")
+	return nil
+}
+
+// ThoroughCleanDestination performs a more aggressive cleanup of the destination cluster
+func (c *Client) ThoroughCleanDestination(destinationURI string) error {
+	c.logger.Info("Performing thorough cleaning of destination cluster...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Connect to destination MongoDB
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(destinationURI))
+	if err != nil {
+		return fmt.Errorf("failed to connect to destination cluster: %w", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// First, drop all user databases
+	databases, err := client.ListDatabaseNames(ctx, map[string]interface{}{})
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	systemDatabases := map[string]bool{
+		"admin":  true,
+		"local":  true,
+		"config": true,
+	}
+
+	for _, dbName := range databases {
+		if !systemDatabases[dbName] {
+			c.logger.Info("Dropping user database", "database", dbName)
+			if err := client.Database(dbName).Drop(ctx); err != nil {
+				return fmt.Errorf("failed to drop database %s: %w", dbName, err)
+			}
+		}
+	}
+
+	// Clean potentially problematic collections in system databases
+	// Clear the oplog in local database (this is often what causes the "existing data" error)
+	localDB := client.Database("local")
+	collections, err := localDB.ListCollectionNames(ctx, map[string]interface{}{})
+	if err == nil {
+		for _, collName := range collections {
+			// Drop oplog and other replica set collections that might cause issues
+			if collName == "oplog.rs" || collName == "replset.minvalid" || collName == "replset.oplogTruncateAfterPoint" {
+				c.logger.Info("Dropping problematic collection", "database", "local", "collection", collName)
+				if err := localDB.Collection(collName).Drop(ctx); err != nil {
+					c.logger.Warn("Failed to drop collection", "database", "local", "collection", collName, "error", err)
+				}
+			}
+		}
+	}
+
+	// Clear any user-created collections in admin database (but keep essential system ones)
+	adminDB := client.Database("admin")
+	adminCollections, err := adminDB.ListCollectionNames(ctx, map[string]interface{}{})
+	if err == nil {
+		essentialAdminCollections := map[string]bool{
+			"system.users":   true,
+			"system.roles":   true,
+			"system.version": true,
+		}
+
+		for _, collName := range adminCollections {
+			if !essentialAdminCollections[collName] && !strings.HasPrefix(collName, "system.") {
+				c.logger.Info("Dropping non-essential admin collection", "collection", collName)
+				if err := adminDB.Collection(collName).Drop(ctx); err != nil {
+					c.logger.Warn("Failed to drop admin collection", "collection", collName, "error", err)
+				}
+			}
+		}
+	}
+
+	c.logger.Info("Thorough destination cluster cleaning completed")
+	return nil
+}
+
+// DiagnoseDestination provides detailed information about what exists on the destination cluster
+func (c *Client) DiagnoseDestination(destinationURI string) error {
+	c.logger.Info("Diagnosing destination cluster for existing data...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Connect to destination MongoDB
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(destinationURI))
+	if err != nil {
+		return fmt.Errorf("failed to connect to destination cluster: %w", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// List all databases
+	databases, err := client.ListDatabaseNames(ctx, map[string]interface{}{})
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	c.logger.Info("Found databases", "count", len(databases), "databases", databases)
+
+	// Check each database for collections and document counts
+	for _, dbName := range databases {
+		db := client.Database(dbName)
+		collections, err := db.ListCollectionNames(ctx, map[string]interface{}{})
+		if err != nil {
+			c.logger.Warn("Failed to list collections", "database", dbName, "error", err)
+			continue
+		}
+
+		c.logger.Info("Database details", "database", dbName, "collections", len(collections))
+
+		for _, collName := range collections {
+			coll := db.Collection(collName)
+			count, err := coll.CountDocuments(ctx, map[string]interface{}{})
+			if err != nil {
+				c.logger.Warn("Failed to count documents", "database", dbName, "collection", collName, "error", err)
+				continue
+			}
+
+			if count > 0 {
+				c.logger.Info("Collection has documents", "database", dbName, "collection", collName, "count", count)
+			}
+		}
+	}
+
+	return nil
 }

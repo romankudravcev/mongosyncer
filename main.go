@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -38,7 +39,7 @@ func main() {
 	}
 
 	// Execute sync workflow
-	if err := executeSyncWorkflow(apiClient, logger); err != nil {
+	if err := executeSyncWorkflow(apiClient, cfg, logger); err != nil {
 		logger.Error("Sync workflow failed", "error", err)
 		err := syncManager.Stop()
 		if err != nil {
@@ -48,8 +49,18 @@ func main() {
 	}
 }
 
-func executeSyncWorkflow(apiClient *api.Client, logger *slog.Logger) error {
-	time.Sleep(130 * time.Second)
+func executeSyncWorkflow(apiClient *api.Client, cfg *config.Config, logger *slog.Logger) error {
+	time.Sleep(20 * time.Second)
+
+	// First, diagnose what's on the destination cluster
+	if err := apiClient.DiagnoseDestination(cfg.TargetURI); err != nil {
+		logger.Warn("Failed to diagnose destination cluster", "error", err)
+	}
+
+	// Perform thorough cleaning of the destination cluster before starting sync
+	if err := apiClient.ThoroughCleanDestination(cfg.TargetURI); err != nil {
+		return fmt.Errorf("failed to thoroughly clean destination cluster: %w", err)
+	}
 
 	// Start the sync process via API
 	if err := apiClient.StartSync(); err != nil {
