@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // Downloader handles mongosync binary downloads
@@ -30,13 +31,12 @@ func (d *Downloader) EnsureBinary(binaryPath, downloadURL string) error {
 
 func (d *Downloader) downloadBinary(binaryPath, downloadURL string) error {
 	tmpTgz := "./mongosync.tgz"
+	maxRetries := 5
 
+	// Download with retry mechanism
 	d.logger.Info("Downloading mongosync binary...")
-	curlCmd := exec.Command("curl", "-L", "-o", tmpTgz, downloadURL)
-	curlCmd.Stdout = os.Stdout
-	curlCmd.Stderr = os.Stderr
-	if err := curlCmd.Run(); err != nil {
-		return fmt.Errorf("download failed: %w", err)
+	if err := d.downloadWithRetry(tmpTgz, downloadURL, maxRetries); err != nil {
+		return fmt.Errorf("download failed after %d attempts: %w", maxRetries, err)
 	}
 
 	d.logger.Info("Extracting mongosync binary...")
@@ -66,4 +66,42 @@ func (d *Downloader) downloadBinary(binaryPath, downloadURL string) error {
 
 	d.logger.Info("Mongosync binary downloaded successfully", "path", binaryPath)
 	return nil
+}
+
+// downloadWithRetry performs the actual download with retry logic
+func (d *Downloader) downloadWithRetry(tmpTgz, downloadURL string, maxRetries int) error {
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		d.logger.Info("Download attempt", "attempt", attempt, "max_retries", maxRetries)
+
+		// Remove any existing temp file from previous failed attempts
+		if attempt > 1 {
+			os.Remove(tmpTgz)
+		}
+
+		curlCmd := exec.Command("curl", "-L", "-o", tmpTgz, downloadURL)
+		curlCmd.Stdout = os.Stdout
+		curlCmd.Stderr = os.Stderr
+
+		if err := curlCmd.Run(); err != nil {
+			lastErr = err
+			d.logger.Warn("Download attempt failed", "attempt", attempt, "error", err)
+
+			// Don't wait after the last attempt
+			if attempt < maxRetries {
+				// Exponential backoff: 2^(attempt-1) seconds
+				waitTime := time.Duration(1<<(attempt-1)) * time.Second
+				d.logger.Info("Retrying download", "wait_seconds", waitTime.Seconds())
+				time.Sleep(waitTime)
+			}
+			continue
+		}
+
+		// Success
+		d.logger.Info("Download completed successfully", "attempt", attempt)
+		return nil
+	}
+
+	return lastErr
 }
